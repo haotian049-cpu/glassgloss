@@ -18,24 +18,38 @@ GlassGloss brings English → Simplified Chinese translation to the page you're 
 
 ## Install
 
-Requires **Apple silicon**, **macOS 26.4 or later**, and current Apple Command Line Tools. If the tools are missing, run `xcode-select --install`.
+**[Download the complete package](https://github.com/haotian049-cpu/glassgloss/releases/latest)** · Apple silicon · macOS 26.4+
+
+1. Download the ZIP, extract it, and open `Install.command`. You can also run `bash install.sh` from the extracted folder. The package is precompiled and installs into your user Library without sudo.
+2. In **Dictionary → Settings**, enable the new dictionaries. Quit and reopen Dictionary first if it was open during install.
+3. In **System Settings → General → Language & Region → Translation Languages**, download English and Simplified Chinese. Select an English sentence, then press **Control + Option + Command + Space**. If macOS asks for permission, authorize only the readers you use when **Choose Apps** is available.
+
+The release is locally signed and **not Apple-notarized**. If your Mac blocks the prebuilt installer or service, use the source build below. [Apple's translation guide](https://support.apple.com/en-us/guide/mac-help/mchldd8b3c15/mac) · [Apple's permission guide](https://support.apple.com/en-us/149699)
+
+## What's inside
+
+| For | Included |
+| --- | --- |
+| Words and terms | Four native dictionaries for Dictionary.app and macOS Look Up: ECDICT, Google AI, MDN and Python. |
+| Sentences and passages | GlassGloss's on-device English → Simplified Chinese floating panel. |
+
+The installer preserves existing dictionaries with the same name or bundle ID. The dictionaries retain their [original licenses and attribution](docs/THIRD-PARTY.md). A scanned page needs a selectable text layer. When a reader does not expose its selection directly, GlassGloss uses its Copy command and updates the clipboard.
+
+## Optional commands
+
+- `bash install.sh translate` installs just the translator.
+- `bash install.sh dictionaries` installs just the four data bundles from the complete ZIP.
+- `bash install.sh uninstall` removes the translator and per-user startup entry. Dictionary files can be managed separately in `~/Library/Dictionaries/`.
+
+For a local source build, install the current Apple Command Line Tools with `xcode-select --install`, then run:
 
 ~~~sh
 git clone https://github.com/haotian049-cpu/glassgloss.git
 cd glassgloss
-bash install.sh
+bash install.sh source
 ~~~
 
-1. Download English and Simplified Chinese in **System Settings → General → Language & Region → Translation Languages**. Apple provides the models, which run locally afterward. [Apple's translation guide](https://support.apple.com/en-us/guide/mac-help/mchldd8b3c15/mac)
-2. Select English text and press **Control + Option + Command + Space**. If macOS asks for permission to read the selection or send Copy to your reader, open the settings from the panel and approve **GlassGloss**. If you see **Choose Apps**, authorize only the readers you use. The service lives at `~/Library/Services/GlassGloss.service`. [Apple's permission guide](https://support.apple.com/en-us/149699)
-
-A scanned page needs a selectable text layer. When a reader does not expose its selection directly, GlassGloss uses its Copy command and updates the clipboard.
-
-## Uninstall or build
-
-Run `bash install.sh uninstall` to remove the service and per-user startup entry. You can remove any permission you granted in System Settings.
-
-Run `bash install.sh build` to compile and sign the local bundle in `.build/` without installing it.
+Use `bash install.sh build` to build without installing. Maintainers can assemble the complete archive with `bash scripts/package.sh DICTIONARY_DIRECTORY OUTPUT_DIRECTORY`.
 
 ## Feedback
 

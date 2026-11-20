@@ -1,0 +1,17 @@
+GlassGloss · 在 Mac 上查词和翻译
+
+1. 解压后双击 Install.command。也可在该目录的终端运行 bash install.sh。
+   预编译版不需要 Xcode、sudo 或第三方运行时。
+2. 查单词：退出并重新打开“词典”，在“词典 → 设置”勾选新词库。
+   先试查 embedding、API、GIL 或 semiconductor。
+3. 翻译整句：在“系统设置 → 通用 → 语言与地区 → 翻译语言”下载英语和简体中文。
+   回到原文选中英文，按 Control + Option + Command + 空格。
+   如果系统询问选区或复制权限，只授权你需要使用的阅读器。
+
+只装词库：bash install.sh dictionaries
+只装翻译：bash install.sh translate
+卸载翻译：bash install.sh uninstall
+删除词库：在“词典”里取消勾选对应来源，再移走 ~/Library/Dictionaries 中对应的词库。
+
+翻译要求 Apple 芯片和 macOS 26.4+。此版本未获 Apple 公证。
+如果系统拒绝启动预编译服务，可按 README 的方式用 Apple 命令行工具从源码安装。

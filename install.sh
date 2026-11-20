@@ -11,8 +11,62 @@ job="$domain/$label"
 logs="$HOME/Library/Logs"
 log="$logs/GlassGloss.log"
 legacy_job="$domain/org.local.offlinetranslate.hotkey"
+mode="${1:-install}"
 
-case "${1:-install}" in
+if [[ "$(uname -s)" != Darwin || "$(id -u)" == 0 ]]; then
+  printf 'Run this installer as your regular macOS user, without sudo.\n' >&2
+  exit 1
+fi
+
+install_dictionaries() {
+  local folder="$HOME/Library/Dictionaries"
+  local book name temp bundle_id existing existing_id
+  local installed=0 skipped=0
+  local -a books
+  shopt -s nullglob
+  books=("$root"/Payload/Dictionaries/*.dictionary)
+  if (( ${#books[@]} == 0 )); then
+    printf 'No dictionaries in this download. Use the complete ZIP from GitHub Releases.\n' >&2
+    return 1
+  fi
+  for book in "${books[@]}"; do
+    /usr/bin/plutil -lint "$book/Contents/Info.plist" >/dev/null
+    /usr/bin/plutil -extract CFBundleIdentifier raw "$book/Contents/Info.plist" >/dev/null
+    test -s "$book/Contents/Resources/Body.data"
+    test -s "$book/Contents/Resources/KeyText.index"
+  done
+  mkdir -p "$folder"
+  for book in "${books[@]}"; do
+    name="${book##*/}"
+    bundle_id="$(/usr/bin/plutil -extract CFBundleIdentifier raw "$book/Contents/Info.plist")"
+    if [[ -e "$folder/$name" ]]; then
+      printf 'Kept existing dictionary: %s\n' "$name"
+      ((skipped+=1))
+      continue
+    fi
+    for existing in "$folder"/*.dictionary; do
+      existing_id="$(/usr/bin/plutil -extract CFBundleIdentifier raw "$existing/Contents/Info.plist" 2>/dev/null || true)"
+      if [[ "$existing_id" == "$bundle_id" ]]; then
+        printf 'Kept existing dictionary: %s\n' "${existing##*/}"
+        ((skipped+=1))
+        continue 2
+      fi
+    done
+    temp="$(mktemp -d "$folder/.glassgloss.XXXXXX")"
+    if ! ditto "$book" "$temp/$name" || ! mv -n "$temp/$name" "$folder/$name"; then
+      rm -rf "$temp"
+      printf 'Could not install dictionary: %s\n' "$name" >&2
+      return 1
+    fi
+    rm -rf "$temp"
+    ((installed+=1))
+    printf 'Installed dictionary: %s\n' "$name"
+  done
+  printf '\nDictionaries: %s installed, %s already present.\n' "$installed" "$skipped"
+  printf 'Quit and reopen Dictionary, then enable the new sources under Dictionary → Settings.\n'
+}
+
+case "$mode" in
   uninstall)
     if launchctl print "$job" >/dev/null 2>&1; then
       launchctl bootout "$job"
@@ -23,14 +77,15 @@ case "${1:-install}" in
     printf 'GlassGloss was removed. Its log, if any, is at %s.\n' "$log"
     exit 0
     ;;
-  install|build) ;;
+  dictionaries) install_dictionaries; exit 0 ;;
+  install|translate|source|build) ;;
   *)
-    printf 'Usage: bash install.sh [install|build|uninstall]\n' >&2
+    printf 'Usage: bash install.sh [install|translate|dictionaries|source|build|uninstall]\n' >&2
     exit 2
     ;;
 esac
 
-if [[ "$(uname -s)" != Darwin || "$(uname -m)" != arm64 ]]; then
+if [[ "$(uname -m)" != arm64 ]]; then
   printf 'GlassGloss requires an Apple silicon Mac.\n' >&2
   exit 1
 fi
@@ -40,24 +95,26 @@ if (( major < 26 || (major == 26 && ${minor:-0} < 4) )); then
   printf 'GlassGloss requires macOS 26.4 or later.\n' >&2
   exit 1
 fi
-if ! xcrun --find swiftc >/dev/null 2>&1; then
-  printf 'Install current Apple Command Line Tools with xcode-select --install, then try again.\n' >&2
-  exit 1
-fi
-
-build="$root/.build"
-mkdir -p "$build"
-stage="$(mktemp -d "$build/stage.XXXXXX")"
+stage="$(mktemp -d "${TMPDIR:-/tmp}/glassgloss.XXXXXX")"
 trap 'rm -rf "$stage"' EXIT
-bundle="$stage/GlassGloss.service"
-mkdir -p "$bundle/Contents/MacOS"
-cp "$root/Resources/Info.plist" "$bundle/Contents/"
-xcrun swiftc -O -parse-as-library -target arm64-apple-macos26.4 -module-cache-path "$build/module-cache" \
-  -o "$bundle/Contents/MacOS/GlassGloss" "$root/Sources/GlassGloss.swift"
-codesign --force --sign - --timestamp=none "$bundle"
+bundle="$root/Payload/GlassGloss.service"
+if [[ "$mode" == build || "$mode" == source || ! -d "$bundle" ]]; then
+  if ! xcrun --find swiftc >/dev/null 2>&1; then
+    printf 'Install current Apple Command Line Tools with xcode-select --install, or download the prebuilt ZIP.\n' >&2
+    exit 1
+  fi
+  build="$root/.build"
+  mkdir -p "$build"
+  bundle="$stage/GlassGloss.service"
+  mkdir -p "$bundle/Contents/MacOS"
+  cp "$root/Resources/Info.plist" "$bundle/Contents/"
+  xcrun swiftc -O -parse-as-library -target arm64-apple-macos26.4 -module-cache-path "$build/module-cache" \
+    -o "$bundle/Contents/MacOS/GlassGloss" "$root/Sources/GlassGloss.swift"
+  codesign --force --sign - --timestamp=none "$bundle"
+fi
 codesign --verify --strict "$bundle"
 
-if [[ "${1:-install}" == build ]]; then
+if [[ "$mode" == build ]]; then
   rm -rf "$build/GlassGloss.service"
   mv "$bundle" "$build/"
   printf 'Built and verified %s\n' "$build/GlassGloss.service"
@@ -127,9 +184,13 @@ for ((attempt = 0; attempt < 40; attempt++)); do
 done
 if (( ! registered )); then
   rollback
-  printf 'Could not register Control+Option+Command+Space. Check whether another tool uses that shortcut.\n' >&2
+  printf 'GlassGloss did not register its shortcut. Check macOS security settings or a shortcut conflict.\n' >&2
+  printf 'Log: %s\n' "$log" >&2
   exit 1
 fi
 
 /System/Library/CoreServices/pbs -update
 printf 'Installed GlassGloss. Select English and press Control+Option+Command+Space.\n'
+if [[ "$mode" == install && -d "$root/Payload/Dictionaries" ]]; then
+  install_dictionaries
+fi
