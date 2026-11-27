@@ -10,6 +10,8 @@ final class TranslationPanel: NSPanel {
     private let visibleFrame: NSRect
     private let bodyWidth: CGFloat
     private let source: String
+    private let ink: NSColor
+    private let secondaryInk: NSColor
     private let stack = NSStackView()
     private let scroll = NSScrollView()
     private let result = NSTextView(usingTextLayoutManager: false)
@@ -26,11 +28,19 @@ final class TranslationPanel: NSPanel {
         let inset: CGFloat = 16
         bodyWidth = width - 2 * inset
         self.source = source.replacingOccurrences(of: #"\s+"#, with: " ", options: .regularExpression)
+        let dark = NSApp.effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+        // Pair fixed ink with a matching surface. Clear glass can otherwise switch
+        // its glass-foreground appearance independently of the reading background.
+        ink = NSColor(genericGamma22White: dark ? 0.98 : 0.10, alpha: 1)
+        secondaryInk = NSColor(genericGamma22White: dark ? 0.79 : 0.32, alpha: 1)
+        let tint = NSColor(genericGamma22White: dark ? 0.12 : 0.98,
+                           alpha: NSWorkspace.shared.accessibilityDisplayShouldReduceTransparency ? 1 : 0.89)
         copyButton = NSButton(title: "拷贝译文", target: target, action: copyAction)
         super.init(contentRect: NSRect(x: pointer.x - 60, y: pointer.y - 12, width: width, height: 0),
                    styleMask: .borderless, backing: .buffered, defer: false)
 
         title = "离线翻译为中文"
+        appearance = NSAppearance(named: dark ? .darkAqua : .aqua)
         isOpaque = false
         backgroundColor = .clear
         hasShadow = true
@@ -61,6 +71,18 @@ final class TranslationPanel: NSPanel {
         glass.style = .clear
         glass.cornerRadius = radius
         let surface = NSView()
+        let readingSurface = NSView()
+        readingSurface.wantsLayer = true
+        readingSurface.layer?.cornerRadius = radius - 3
+        readingSurface.layer?.backgroundColor = tint.cgColor
+        readingSurface.translatesAutoresizingMaskIntoConstraints = false
+        surface.addSubview(readingSurface)
+        NSLayoutConstraint.activate([
+            readingSurface.leadingAnchor.constraint(equalTo: surface.leadingAnchor, constant: 3),
+            readingSurface.trailingAnchor.constraint(equalTo: surface.trailingAnchor, constant: -3),
+            readingSurface.topAnchor.constraint(equalTo: surface.topAnchor, constant: 3),
+            readingSurface.bottomAnchor.constraint(equalTo: surface.bottomAnchor, constant: -3)
+        ])
         glass.contentView = surface
         for view in [backdrop, glass] {
             view.translatesAutoresizingMaskIntoConstraints = false
@@ -76,17 +98,19 @@ final class TranslationPanel: NSPanel {
 
         let heading = NSTextField(labelWithString: "离线翻译")
         heading.font = .systemFont(ofSize: 13, weight: .semibold)
-        heading.textColor = .secondaryLabelColor
+        heading.textColor = secondaryInk
         heading.setContentHuggingPriority(.required, for: .horizontal)
         let spacer = NSView()
         spacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
 
         copyButton.bezelStyle = .glass
+        copyButton.contentTintColor = ink
         copyButton.controlSize = .small
         copyButton.isEnabled = false
         let close = NSButton(image: NSImage(systemSymbolName: "xmark", accessibilityDescription: "关闭")!,
                              target: self, action: #selector(dismissPanel))
         close.bezelStyle = .glass
+        close.contentTintColor = ink
         close.controlSize = .small
         close.keyEquivalent = "\u{1b}"
         close.toolTip = "关闭（Esc）"
@@ -96,6 +120,7 @@ final class TranslationPanel: NSPanel {
         if let permissionAction {
             let settings = NSButton(title: "打开权限设置", target: target, action: permissionAction)
             settings.bezelStyle = .glass
+            settings.contentTintColor = ink
             settings.controlSize = .small
             actionButton = settings
         } else {
@@ -153,14 +178,14 @@ final class TranslationPanel: NSPanel {
             sourceStyle.paragraphSpacing = 9
             body.append(NSAttributedString(string: source + "\n", attributes: [
                 .font: NSFont.systemFont(ofSize: 13),
-                .foregroundColor: NSColor.secondaryLabelColor,
+                .foregroundColor: secondaryInk,
                 .paragraphStyle: sourceStyle
             ]))
         }
         let translationStart = body.length
         body.append(NSAttributedString(string: displayText, attributes: [
             .font: NSFont.systemFont(ofSize: 17),
-            .foregroundColor: NSColor.labelColor,
+            .foregroundColor: ink,
             .paragraphStyle: paragraph
         ]))
         result.textStorage?.setAttributedString(body)
