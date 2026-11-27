@@ -10,8 +10,7 @@ final class TranslationPanel: NSPanel {
     private let visibleFrame: NSRect
     private let bodyWidth: CGFloat
     private let source: String
-    private let ink: NSColor
-    private let secondaryInk: NSColor
+    private let resultFontSize: CGFloat
     private let stack = NSStackView()
     private let scroll = NSScrollView()
     private let result = NSTextView(usingTextLayoutManager: false)
@@ -24,23 +23,17 @@ final class TranslationPanel: NSPanel {
         let pointer = NSEvent.mouseLocation
         visibleFrame = NSScreen.screens.first(where: { NSMouseInRect(pointer, $0.frame, false) })?.visibleFrame
             ?? NSScreen.main?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1280, height: 800)
-        let width = min(460, visibleFrame.width - 24)
+        let isPermissionNotice = permissionAction != nil
+        let width = min(isPermissionNotice ? 364 : 460, visibleFrame.width - 24)
         let inset: CGFloat = 16
         bodyWidth = width - 2 * inset
         self.source = source.replacingOccurrences(of: #"\s+"#, with: " ", options: .regularExpression)
-        let dark = NSApp.effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
-        // Pair fixed ink with a matching surface. Clear glass can otherwise switch
-        // its glass-foreground appearance independently of the reading background.
-        ink = NSColor(genericGamma22White: dark ? 0.98 : 0.10, alpha: 1)
-        secondaryInk = NSColor(genericGamma22White: dark ? 0.79 : 0.32, alpha: 1)
-        let tint = NSColor(genericGamma22White: dark ? 0.12 : 0.98,
-                           alpha: NSWorkspace.shared.accessibilityDisplayShouldReduceTransparency ? 1 : 0.89)
+        resultFontSize = isPermissionNotice ? 14 : 17
         copyButton = NSButton(title: "拷贝译文", target: target, action: copyAction)
         super.init(contentRect: NSRect(x: pointer.x - 60, y: pointer.y - 12, width: width, height: 0),
                    styleMask: .borderless, backing: .buffered, defer: false)
 
         title = "离线翻译为中文"
-        appearance = NSAppearance(named: dark ? .darkAqua : .aqua)
         isOpaque = false
         backgroundColor = .clear
         hasShadow = true
@@ -50,67 +43,28 @@ final class TranslationPanel: NSPanel {
         level = .floating
         collectionBehavior = .fullScreenAuxiliary
 
-        let radius: CGFloat = 22
-        let root = NSView()
-        let backdrop = NSVisualEffectView()
-        backdrop.material = .popover
-        backdrop.blendingMode = .behindWindow
-        backdrop.state = .active
-        backdrop.alphaValue = 0.4
-        let maskSize = NSSize(width: radius * 2 + 2, height: radius * 2 + 2)
-        let mask = NSImage(size: maskSize, flipped: false) { bounds in
-            NSColor.black.setFill()
-            NSBezierPath(roundedRect: bounds, xRadius: radius, yRadius: radius).fill()
-            return true
-        }
-        mask.capInsets = NSEdgeInsets(top: radius, left: radius, bottom: radius, right: radius)
-        mask.resizingMode = .stretch
-        backdrop.maskImage = mask
-
+        // Standard glass handles contrast for text placed inside its content view.
         let glass = NSGlassEffectView()
-        glass.style = .clear
-        glass.cornerRadius = radius
+        glass.style = .regular
+        glass.cornerRadius = 22
         let surface = NSView()
-        let readingSurface = NSView()
-        readingSurface.wantsLayer = true
-        readingSurface.layer?.cornerRadius = radius - 3
-        readingSurface.layer?.backgroundColor = tint.cgColor
-        readingSurface.translatesAutoresizingMaskIntoConstraints = false
-        surface.addSubview(readingSurface)
-        NSLayoutConstraint.activate([
-            readingSurface.leadingAnchor.constraint(equalTo: surface.leadingAnchor, constant: 3),
-            readingSurface.trailingAnchor.constraint(equalTo: surface.trailingAnchor, constant: -3),
-            readingSurface.topAnchor.constraint(equalTo: surface.topAnchor, constant: 3),
-            readingSurface.bottomAnchor.constraint(equalTo: surface.bottomAnchor, constant: -3)
-        ])
         glass.contentView = surface
-        for view in [backdrop, glass] {
-            view.translatesAutoresizingMaskIntoConstraints = false
-            root.addSubview(view)
-            NSLayoutConstraint.activate([
-                view.leadingAnchor.constraint(equalTo: root.leadingAnchor),
-                view.trailingAnchor.constraint(equalTo: root.trailingAnchor),
-                view.topAnchor.constraint(equalTo: root.topAnchor),
-                view.bottomAnchor.constraint(equalTo: root.bottomAnchor)
-            ])
-        }
-        contentView = root
+        contentView = glass
 
         let heading = NSTextField(labelWithString: "离线翻译")
         heading.font = .systemFont(ofSize: 13, weight: .semibold)
-        heading.textColor = secondaryInk
+        heading.textColor = .secondaryLabelColor
         heading.setContentHuggingPriority(.required, for: .horizontal)
         let spacer = NSView()
         spacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
 
-        copyButton.bezelStyle = .glass
-        copyButton.contentTintColor = ink
+        copyButton.bezelStyle = .recessed
         copyButton.controlSize = .small
         copyButton.isEnabled = false
         let close = NSButton(image: NSImage(systemSymbolName: "xmark", accessibilityDescription: "关闭")!,
                              target: self, action: #selector(dismissPanel))
-        close.bezelStyle = .glass
-        close.contentTintColor = ink
+        close.bezelStyle = .recessed
+        close.isBordered = false
         close.controlSize = .small
         close.keyEquivalent = "\u{1b}"
         close.toolTip = "关闭（Esc）"
@@ -118,9 +72,8 @@ final class TranslationPanel: NSPanel {
 
         let actionButton: NSButton
         if let permissionAction {
-            let settings = NSButton(title: "打开权限设置", target: target, action: permissionAction)
-            settings.bezelStyle = .glass
-            settings.contentTintColor = ink
+            let settings = NSButton(title: "打开设置", target: target, action: permissionAction)
+            settings.bezelStyle = .recessed
             settings.controlSize = .small
             actionButton = settings
         } else {
@@ -178,14 +131,14 @@ final class TranslationPanel: NSPanel {
             sourceStyle.paragraphSpacing = 9
             body.append(NSAttributedString(string: source + "\n", attributes: [
                 .font: NSFont.systemFont(ofSize: 13),
-                .foregroundColor: secondaryInk,
+                .foregroundColor: NSColor.secondaryLabelColor,
                 .paragraphStyle: sourceStyle
             ]))
         }
         let translationStart = body.length
         body.append(NSAttributedString(string: displayText, attributes: [
-            .font: NSFont.systemFont(ofSize: 17),
-            .foregroundColor: ink,
+            .font: NSFont.systemFont(ofSize: resultFontSize),
+            .foregroundColor: NSColor.labelColor,
             .paragraphStyle: paragraph
         ]))
         result.textStorage?.setAttributedString(body)
@@ -327,7 +280,7 @@ final class GlassGlossService: NSObject, NSApplicationDelegate, NSWindowDelegate
         }
 
         guard CGPreflightPostEventAccess() else {
-            showMessage("首次使用需要允许 GlassGloss 读取选区或代为复制。请在系统设置里仅授权你要翻译的 App，然后重试。", offerPermission: true)
+            showMessage("请允许翻译服务读取选中的文字。", offerPermission: true)
             return
         }
 
