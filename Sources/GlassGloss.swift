@@ -42,17 +42,22 @@ final class TranslationPanel: NSPanel {
         level = .floating
         collectionBehavior = .fullScreenAuxiliary
 
-        // Standard glass handles contrast for text placed inside its content view.
+        // Anchor dark ink against both light documents and dark reader backgrounds.
         let glass = NSGlassEffectView()
         glass.style = .clear
         glass.cornerRadius = 24
         let surface = NSView()
+        surface.appearance = NSAppearance(named: .aqua)
+        surface.wantsLayer = true
+        surface.layer?.backgroundColor = NSColor.white.withAlphaComponent(0.55).cgColor
+        surface.layer?.cornerRadius = glass.cornerRadius
+        surface.layer?.cornerCurve = .continuous
         glass.contentView = surface
         contentView = glass
 
         let heading = NSTextField(labelWithString: "离线翻译")
         heading.font = .systemFont(ofSize: 13, weight: .semibold)
-        heading.textColor = .secondaryLabelColor
+        heading.textColor = NSColor(white: 0.12, alpha: 1)
         heading.setContentHuggingPriority(.required, for: .horizontal)
         let spacer = NSView()
         spacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
@@ -64,6 +69,7 @@ final class TranslationPanel: NSPanel {
         let close = NSButton(image: NSImage(systemSymbolName: "xmark", accessibilityDescription: "关闭")!,
                              target: self, action: #selector(dismissPanel))
         close.bezelStyle = .recessed
+        close.contentTintColor = .black
         close.isBordered = false
         close.controlSize = .small
         close.keyEquivalent = "\u{1b}"
@@ -79,6 +85,9 @@ final class TranslationPanel: NSPanel {
         } else {
             actionButton = copyButton
         }
+
+        actionButton.isBordered = false
+        actionButton.attributedTitle = NSAttributedString(string: actionButton.title, attributes: [.foregroundColor: NSColor.black, .font: NSFont.systemFont(ofSize: 12, weight: .medium)])
 
         let header = NSStackView(views: [heading, spacer, actionButton, close])
         header.orientation = .horizontal
@@ -131,14 +140,14 @@ final class TranslationPanel: NSPanel {
             sourceStyle.paragraphSpacing = 9
             body.append(NSAttributedString(string: source + "\n", attributes: [
                 .font: NSFont.systemFont(ofSize: 13),
-                .foregroundColor: NSColor.secondaryLabelColor,
+                .foregroundColor: NSColor(white: 0.12, alpha: 1),
                 .paragraphStyle: sourceStyle
             ]))
         }
         let translationStart = body.length
         body.append(NSAttributedString(string: displayText, attributes: [
             .font: NSFont.systemFont(ofSize: resultFontSize),
-            .foregroundColor: NSColor.labelColor,
+            .foregroundColor: NSColor(white: 0.045, alpha: 1),
             .paragraphStyle: paragraph
         ]))
         result.textStorage?.setAttributedString(body)
