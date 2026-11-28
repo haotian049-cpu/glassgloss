@@ -23,12 +23,11 @@ final class TranslationPanel: NSPanel {
         let pointer = NSEvent.mouseLocation
         visibleFrame = NSScreen.screens.first(where: { NSMouseInRect(pointer, $0.frame, false) })?.visibleFrame
             ?? NSScreen.main?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1280, height: 800)
-        let isPermissionNotice = permissionAction != nil
-        let width = min(isPermissionNotice ? 364 : 460, visibleFrame.width - 24)
+        let width = min(source.isEmpty ? 364 : 460, visibleFrame.width - 24)
         let inset: CGFloat = 16
         bodyWidth = width - 2 * inset
         self.source = source.replacingOccurrences(of: #"\s+"#, with: " ", options: .regularExpression)
-        resultFontSize = isPermissionNotice ? 14 : 17
+        resultFontSize = source.isEmpty ? 14 : 17
         copyButton = NSButton(title: "拷贝译文", target: target, action: copyAction)
         super.init(contentRect: NSRect(x: pointer.x - 60, y: pointer.y - 12, width: width, height: 0),
                    styleMask: .borderless, backing: .buffered, defer: false)
@@ -36,7 +35,7 @@ final class TranslationPanel: NSPanel {
         title = "离线翻译为中文"
         isOpaque = false
         backgroundColor = .clear
-        hasShadow = true
+        hasShadow = false
         isReleasedWhenClosed = false
         isFloatingPanel = true
         isMovableByWindowBackground = true
@@ -46,10 +45,24 @@ final class TranslationPanel: NSPanel {
         // Standard glass handles contrast for text placed inside its content view.
         let glass = NSGlassEffectView()
         glass.style = .regular
-        glass.cornerRadius = 22
+        glass.cornerRadius = 24
         let surface = NSView()
         glass.contentView = surface
-        contentView = glass
+        // Diffuse the document beneath the glass so its glyphs cannot compete with the translation.
+        let backdrop = NSVisualEffectView()
+        backdrop.material = .popover
+        backdrop.blendingMode = .behindWindow
+        backdrop.state = .active
+        backdrop.wantsLayer = true
+        backdrop.layer?.cornerRadius = glass.cornerRadius
+        backdrop.layer?.cornerCurve = .continuous
+        backdrop.layer?.masksToBounds = true
+        backdrop.addSubview(glass)
+        glass.frame = backdrop.bounds
+        glass.autoresizingMask = [.width, .height]
+        backdrop.layer?.borderWidth = 0.75
+        backdrop.layer?.borderColor = NSColor.white.withAlphaComponent(0.45).cgColor
+        contentView = backdrop
 
         let heading = NSTextField(labelWithString: "离线翻译")
         heading.font = .systemFont(ofSize: 13, weight: .semibold)
@@ -61,6 +74,7 @@ final class TranslationPanel: NSPanel {
         copyButton.bezelStyle = .recessed
         copyButton.controlSize = .small
         copyButton.isEnabled = false
+        copyButton.isHidden = true
         let close = NSButton(image: NSImage(systemSymbolName: "xmark", accessibilityDescription: "关闭")!,
                              target: self, action: #selector(dismissPanel))
         close.bezelStyle = .recessed
@@ -390,6 +404,7 @@ final class GlassGlossService: NSObject, NSApplicationDelegate, NSWindowDelegate
                 self.translated = response
                 self.panel?.setResult(response)
                 self.panel?.copyButton.isEnabled = true
+                self.panel?.copyButton.isHidden = false
                 NSLog("GlassGloss completed")
             } catch {
                 guard !Task.isCancelled else { return }
