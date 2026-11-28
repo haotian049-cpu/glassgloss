@@ -44,25 +44,11 @@ final class TranslationPanel: NSPanel {
 
         // Standard glass handles contrast for text placed inside its content view.
         let glass = NSGlassEffectView()
-        glass.style = .regular
+        glass.style = .clear
         glass.cornerRadius = 24
         let surface = NSView()
         glass.contentView = surface
-        // Diffuse the document beneath the glass so its glyphs cannot compete with the translation.
-        let backdrop = NSVisualEffectView()
-        backdrop.material = .popover
-        backdrop.blendingMode = .behindWindow
-        backdrop.state = .active
-        backdrop.wantsLayer = true
-        backdrop.layer?.cornerRadius = glass.cornerRadius
-        backdrop.layer?.cornerCurve = .continuous
-        backdrop.layer?.masksToBounds = true
-        backdrop.addSubview(glass)
-        glass.frame = backdrop.bounds
-        glass.autoresizingMask = [.width, .height]
-        backdrop.layer?.borderWidth = 0.75
-        backdrop.layer?.borderColor = NSColor.white.withAlphaComponent(0.45).cgColor
-        contentView = backdrop
+        contentView = glass
 
         let heading = NSTextField(labelWithString: "离线翻译")
         heading.font = .systemFont(ofSize: 13, weight: .semibold)
